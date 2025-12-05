@@ -1,14 +1,12 @@
-name: Docker Build and Push
+name: Deploy images to Github container registry
 
 on:
-  push:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  OWNER: ${{ github.repository_owner }}
-  REPO: ${{ github.event.repository.name }}
+  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/todo-backend
+  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/todo-frontend
 
 jobs:
   build-and-push:
@@ -16,110 +14,74 @@ jobs:
     permissions:
       contents: read
       packages: write
-
     strategy:
       matrix:
-        service:
-          - name: frontend
-            path: frontend
-            type: node
+        include:
           - name: backend
-            path: backend
-            type: java
-
+            context: ./spring-boot-server
+          - name: frontend
+            context: ./angular-17-client
+    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      # Setup language environments 
-      - name: Set up JDK
-        if: matrix.service.type == 'java'
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'maven'
+    - name: Set up JDK
+      if: matrix.name == 'backend'
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: 'maven'
 
-      - name: Set up Node.js
-        if: matrix.service.type == 'node'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: ${{ matrix.service.path }}/package-lock.json
+    - name: Set up Node.js
+      if: matrix.name == 'frontend'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: ${{ matrix.context }}/package-lock.json
 
-      # Run backend tests
-      - name: Run backend tests
-        if: matrix.service.type == 'java'
-        working-directory: ${{ matrix.service.path }}
-        run: mvn -q test
+    - name: Run backend tests
+      if: matrix.name == 'backend'
+      working-directory: ${{ matrix.context }}
+      run: mvn test
 
-      # Run frontend tests
-      - name: Install frontend deps
-        if: matrix.service.type == 'node'
-        working-directory: ${{ matrix.service.path }}
-        run: npm ci
+    - name: Install frontend dependencies
+      if: matrix.name == 'frontend'
+      working-directory: ${{ matrix.context }}
+      run: npm ci
 
-      - name: Run frontend tests
-        if: matrix.service.type == 'node'
-        working-directory: ${{ matrix.service.path }}
-        run: npm test -- --watch=false --browsers=ChromeHeadless
+    - name: Run frontend tests
+      if: matrix.name == 'frontend'
+      working-directory: ${{ matrix.context }}
+      run: npm test -- --watch=false --browsers=ChromeHeadless
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/todo-${{ matrix.name }}
+        tags: |
+          type=sha,prefix=,format=short
+          type=raw,value=latest,enable={{is_default_branch}}
 
-      # Metadata for tagging and labels
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}-${{ matrix.service.name }}
-          tags: |
-            type=sha,prefix=,format=short
-            type=raw,value=latest,enable={{is_default_branch})
-          labels: |
-            org.opencontainers.image.source=${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-
-      - name: Build & Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./${{ matrix.service.path }}
-          file: ./${{ matrix.service.path }}/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.service.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
-
-  # TRIVY SCAN PER IMAGE 
-  trivy-scan:
-    runs-on: ubuntu-latest
-    needs: build-and-push
-
-    strategy:
-      matrix:
-        image: 
-          - backend
-          - frontend
-
-    steps:
-      - name: Scan image ${{ matrix.image }}
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-${{ matrix.image }}:latest
-          format: table
-          exit-code: 1
-          vuln-type: 'os,library'
-          severity: CRITICAL
+    - name: Build and push image
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ matrix.context }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha,scope=${{ matrix.name }}
+        cache-to: type=gha,mode=max,scope=${{ matrix.name }}
