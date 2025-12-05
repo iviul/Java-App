@@ -1,0 +1,16 @@
+target
+.git
+.gitignore
+.mvn
+.env
+.vscode
+.idea
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+.classpath
+.project
+.settings
+README.md
