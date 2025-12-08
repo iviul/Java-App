@@ -1,8 +1,8 @@
 # Project Documentation: Angular 17 + Spring Boot + MySQL CRUD Application
 
-## 📋 About the App
+## About the App
 
-This is a **full-stack Tutorial Management CRUD Application** that demonstrates a modern, production-ready architecture combining:
+This is a **full-stack Tutorial Management CRUD Application** :
 - **Frontend**: Angular 17 with Bootstrap
 - **Backend**: Spring Boot 3.1.5 with Spring Data JPA
 - **Database**: MySQL 8.0
@@ -33,7 +33,7 @@ Each tutorial contains:
 
 ---
 
-## 🏗️ Architecture & Components
+## Architecture & Components
 
 ### Overall Architecture
 
@@ -247,7 +247,7 @@ Frontend accessible at **http://localhost:4200**
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 app/
@@ -341,7 +341,7 @@ app/
 
 ---
 
-## 🛠️ Technology Stack Summary
+## Technology Stack Summary
 
 ### Frontend Technologies
 | Technology | Version | Purpose |
@@ -410,7 +410,7 @@ app/
 
 ---
 
-## 🔄 CI/CD Pipeline
+## CI/CD Pipeline
 
 **Workflow File**: `.github/workflows/build-and-push.yml`
 
