@@ -1,17 +1,19 @@
 services:
-  # MySQL Database
-  mysql:
-    image: mysql:8.0
-    container_name: mysql-container
+  # PostgreSQL Database
+  postgres:
+    platform: linux/amd64
+    image: postgres:15
+    container_name: postgres-container
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql-data:/var/lib/mysql
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       timeout: 10s
       retries: 5
     networks:
@@ -19,16 +21,19 @@ services:
 
   # Spring Boot Backend
   spring-boot:
+    platform: linux/amd64
     build:
       context: ./spring-boot-server
       dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     container_name: spring-boot-container
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DB_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DB_PASSWORD}
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
     ports:
       - "8081:8080"
     healthcheck:
@@ -38,7 +43,7 @@ services:
       retries: 3
       start_period: 40s
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     networks:
       - app-network
@@ -46,9 +51,12 @@ services:
 
   # Angular Frontend
   angular:
+    platform: linux/amd64
     build:
       context: ./angular-17-client
       dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     container_name: angular-container
     ports:
       - "8080:80"
@@ -59,7 +67,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  mysql-data:
+  postgres-data:
 
 networks:
   app-network:
